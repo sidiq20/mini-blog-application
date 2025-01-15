@@ -1,32 +1,47 @@
 import datetime
+import os
 from flask import Flask, render_template, request
 from pymongo import MongoClient
+from dotenv import load_dotenv
 
-app = Flask(__name__)
-client = MongoClient("mongodb+srv://sidiqolasode:1N7wJaJsOa13Hqyq@miniblog.zkfa0.mongodb.net/")
-app.db = client.microblog
+load_dotenv
 
+def create_app():
+    app = Flask(__name__)
+    client = MongoClient(os.getenv("MONGODB_URI"))
+    app.db = client.microblog
 
-@app.route("/", methods=["GET", "POST"])
-def home():
-    if request.method == "POST":
-        entry_content = request.form.get("content")
-        if entry_content:
-            formatted_date = datetime.datetime.today(). strftime("%Y-%m-%d")
-            app.db.entries.insert_one({"content": entry_content, "date": formatted_date})
-        else:
-            print("Empty content cannot be insterted")
+    @app.route("/", methods=["GET", "POST"])
+    def home():
+        if request.method == "POST":
+            entry_content = request.form.get("content")
+            if entry_content:
+                formatted_date = datetime.datetime.today().strftime("%Y-%m-%d")
+                try:
+                    app.db.entries.insert_one({"content": entry_content, "date": formatted_date})
+                except Exception as e:
+                    print("Error inserting into MongoDB:", e)
+            else:
+                print("Empty content cannot be inserted")
 
-    entries_with_date = [
-        (
-            entry["content"],
-            entry["date"],
-            datetime.datetime.strptime(entry.get("date", "1900-01-01"), "%Y-%m-%d").strftime("%b %d")
-            if "date" in entry else "N/A"
-        )
-        for entry in app.db.entries.find({})
-    ]
-    return render_template("home.html", entries=entries_with_date)
+        try:
+            entries_with_date = [
+                (
+                    entry["content"],
+                    entry["date"],
+                    datetime.datetime.strptime(entry.get("date", "1900-01-01"), "%Y-%m-%d").strftime("%b %d")
+                    if "date" in entry else "N/A"
+                )
+                for entry in app.db.entries.find({})
+            ]
+        except Exception as e:
+            print("Error fetching from MongoDB:", e)
+            entries_with_date = []
 
-if __name__ == '__main__':
+        return render_template("home.html", entries=entries_with_date)
+
+    return app
+
+if __name__ == "__main__":
+    app = create_app()
     app.run(debug=True, port=3000)
